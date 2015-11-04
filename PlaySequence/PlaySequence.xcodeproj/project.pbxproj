@@ -73,31 +73,6 @@
 		};
 /* End PBXBuildFile section */
 
-/* Begin PBXBuildStyle section */
-		014CEA460018CE2711CA2923 = {
-			isa = PBXBuildStyle;
-			buildSettings = {
-				COPY_PHASE_STRIP = NO;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_ENABLE_FIX_AND_CONTINUE = YES;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				OPTIMIZATION_CFLAGS = "-O0";
-				OTHER_CFLAGS = "\U0001-DDEBUG";
-			};
-			name = Development;
-		};
-		014CEA470018CE2711CA2923 = {
-			isa = PBXBuildStyle;
-			buildSettings = {
-				COPY_PHASE_STRIP = YES;
-				GCC_ENABLE_FIX_AND_CONTINUE = NO;
-				ZERO_LINK = NO;
-			};
-			name = Deployment;
-		};
-/* End PBXBuildStyle section */
-
 /* Begin PBXFileReference section */
 		08FB7796FE84155DC02AAC07 = {
 			isa = PBXFileReference;
@@ -314,23 +289,6 @@
 			);
 			buildRules = (
 			);
-			buildSettings = {
-				FRAMEWORK_SEARCH_PATHS = "";
-				HEADER_SEARCH_PATHS = "";
-				INSTALL_PATH = "$(HOME)/bin";
-				LIBRARY_SEARCH_PATHS = "";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				OTHER_REZFLAGS = "";
-				PRODUCT_NAME = PlaySequence;
-				REZ_EXECUTABLE = YES;
-				SECTORDER_FLAGS = "";
-				WARNING_CFLAGS = (
-					"-Wmost",
-					"-Wno-four-char-constants",
-					"-Wno-unknown-pragmas",
-				);
-			};
 			dependencies = (
 			);
 			name = PlaySequence;
@@ -345,12 +303,6 @@
 		08FB7793FE84155DC02AAC07 = {
 			isa = PBXProject;
 			buildConfigurationList = A9E8845A0874AAEB00B2DFE8;
-			buildSettings = {
-			};
-			buildStyles = (
-				014CEA460018CE2711CA2923,
-				014CEA470018CE2711CA2923,
-			);
 			hasScannedForEncodings = 1;
 			mainGroup = 08FB7794FE84155DC02AAC07;
 			projectDirPath = "";
@@ -399,7 +351,9 @@
 				INSTALL_PATH = "$(HOME)/bin";
 				LIBRARY_SEARCH_PATHS = "";
 				OPTIMIZATION_CFLAGS = "-O0";
-				OTHER_CFLAGS = " -DDEBUG";
+				OTHER_CFLAGS = (
+					"-DDEBUG",
+				);
 				OTHER_LDFLAGS = "";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = PlaySequence;
@@ -461,18 +415,21 @@
 		A9E8845B0874AAEB00B2DFE8 = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
 			};
 			name = Development;
 		};
 		A9E8845C0874AAEB00B2DFE8 = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
 			};
 			name = Deployment;
 		};
 		A9E8845D0874AAEB00B2DFE8 = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
 			};
 			name = Default;
 		};

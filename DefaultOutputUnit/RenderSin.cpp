@@ -150,17 +150,14 @@ int ParseArgsAndSetup (int argc, const char* argv[])
 	
 	switch (sWhichFormat) {
 		case kAsFloat:
-			theFormatFlags =  kLinearPCMFormatFlagIsFloat 
-								| kLinearPCMFormatFlagIsBigEndian
-								| kLinearPCMFormatFlagIsPacked
-								| kAudioFormatFlagIsNonInterleaved;
+			theFormatFlags =  kAudioFormatFlagsNativeFloatPacked;
 			theBytesPerFrame = theBytesInAPacket = 4;
 			theBitsPerChannel = 32;
 			break;
 		
 		case kAs16Bit:
 			theFormatFlags =  kLinearPCMFormatFlagIsSignedInteger 
-								| kLinearPCMFormatFlagIsBigEndian
+								| kAudioFormatFlagsNativeEndian
 								| kLinearPCMFormatFlagIsPacked
 								| kAudioFormatFlagIsNonInterleaved;
 			theBytesPerFrame = theBytesInAPacket = 2;
@@ -169,7 +166,7 @@ int ParseArgsAndSetup (int argc, const char* argv[])
 			
 		case kAs24Bit:
 			theFormatFlags =  kLinearPCMFormatFlagIsSignedInteger 
-								| kLinearPCMFormatFlagIsBigEndian
+								| kAudioFormatFlagsNativeEndian
 								| kAudioFormatFlagIsNonInterleaved;
 			theBytesPerFrame = theBytesInAPacket = 4;
 			theBitsPerChannel = 24;
