@@ -1,0 +1,493 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 42;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		8D1107280486CEB800E47090 = {
+			isa = PBXBuildFile;
+			fileRef = 32CA4F630368D1EE00C91783;
+		};
+		8D11072A0486CEB800E47090 = {
+			isa = PBXBuildFile;
+			fileRef = 29B97318FDCFA39411CA2CEA;
+		};
+		8D11072B0486CEB800E47090 = {
+			isa = PBXBuildFile;
+			fileRef = 089C165CFE840E0CC02AAC07;
+		};
+		8D11072D0486CEB800E47090 = {
+			isa = PBXBuildFile;
+			fileRef = 29B97316FDCFA39411CA2CEA;
+			settings = {
+				ATTRIBUTES = (
+				);
+			};
+		};
+		8D11072F0486CEB800E47090 = {
+			isa = PBXBuildFile;
+			fileRef = 1058C7A1FEA54F0111CA2CBB;
+		};
+		91004392066E8836005A1EC3 = {
+			isa = PBXBuildFile;
+			fileRef = 91004391066E8836005A1EC3;
+		};
+		9152ACC60685A7BD001DF47C = {
+			isa = PBXBuildFile;
+			fileRef = 9152ACC50685A7BD001DF47C;
+		};
+		91D9919D066D52FD007BC8B3 = {
+			isa = PBXBuildFile;
+			fileRef = 91D9919B066D52FD007BC8B3;
+		};
+		91D9919E066D52FD007BC8B3 = {
+			isa = PBXBuildFile;
+			fileRef = 91D9919C066D52FD007BC8B3;
+		};
+		91D991BB066D60B8007BC8B3 = {
+			isa = PBXBuildFile;
+			fileRef = 91D991B9066D60B8007BC8B3;
+		};
+		91D991BC066D60B8007BC8B3 = {
+			isa = PBXBuildFile;
+			fileRef = 91D991BA066D60B8007BC8B3;
+		};
+		91D994F5066E449F007BC8B3 = {
+			isa = PBXBuildFile;
+			fileRef = 91D994F3066E449F007BC8B3;
+		};
+		91D994F6066E449F007BC8B3 = {
+			isa = PBXBuildFile;
+			fileRef = 91D994F4066E449F007BC8B3;
+		};
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		089C165DFE840E0CC02AAC07 = {
+			isa = PBXFileReference;
+			fileEncoding = 10;
+			lastKnownFileType = text.plist.strings;
+			name = English;
+			path = English.lproj/InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		1058C7A1FEA54F0111CA2CBB = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.framework;
+			name = Cocoa.framework;
+			path = /System/Library/Frameworks/Cocoa.framework;
+			sourceTree = "<absolute>";
+		};
+		29B97316FDCFA39411CA2CEA = {
+			isa = PBXFileReference;
+			fileEncoding = 30;
+			lastKnownFileType = sourcecode.c.objc;
+			path = main.m;
+			sourceTree = "<group>";
+		};
+		29B97319FDCFA39411CA2CEA = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.nib;
+			name = English;
+			path = English.lproj/MainMenu.nib;
+			sourceTree = "<group>";
+		};
+		29B97324FDCFA39411CA2CEA = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.framework;
+			name = AppKit.framework;
+			path = /System/Library/Frameworks/AppKit.framework;
+			sourceTree = "<absolute>";
+		};
+		29B97325FDCFA39411CA2CEA = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.framework;
+			name = Foundation.framework;
+			path = /System/Library/Frameworks/Foundation.framework;
+			sourceTree = "<absolute>";
+		};
+		32CA4F630368D1EE00C91783 = {
+			isa = PBXFileReference;
+			fileEncoding = 4;
+			lastKnownFileType = sourcecode.c.h;
+			path = MixMash_Prefix.pch;
+			sourceTree = SOURCE_ROOT;
+		};
+		8D1107310486CEB800E47090 = {
+			isa = PBXFileReference;
+			fileEncoding = 4;
+			lastKnownFileType = text.plist;
+			path = Info.plist;
+			sourceTree = "<group>";
+		};
+		8D1107320486CEB800E47090 = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.application;
+			includeInIndex = 0;
+			path = MixMash.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		91004391066E8836005A1EC3 = {
+			isa = PBXFileReference;
+			fileEncoding = 30;
+			lastKnownFileType = sourcecode.cpp.cpp;
+			path = CAStreamBasicDescription.cpp;
+			sourceTree = "<group>";
+		};
+		9152ACC50685A7BD001DF47C = {
+			isa = PBXFileReference;
+			lastKnownFileType = image.tiff;
+			path = Speaker.tiff;
+			sourceTree = "<group>";
+		};
+		91D9919B066D52FD007BC8B3 = {
+			isa = PBXFileReference;
+			fileEncoding = 4;
+			lastKnownFileType = sourcecode.c.h;
+			path = MixMash.h;
+			sourceTree = SOURCE_ROOT;
+		};
+		91D9919C066D52FD007BC8B3 = {
+			isa = PBXFileReference;
+			fileEncoding = 4;
+			lastKnownFileType = sourcecode.cpp.objcpp;
+			path = MixMash.mm;
+			sourceTree = "<group>";
+		};
+		91D991B9066D60B8007BC8B3 = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.framework;
+			name = AudioToolbox.framework;
+			path = /System/Library/Frameworks/AudioToolbox.framework;
+			sourceTree = "<absolute>";
+		};
+		91D991BA066D60B8007BC8B3 = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.framework;
+			name = AudioUnit.framework;
+			path = /System/Library/Frameworks/AudioUnit.framework;
+			sourceTree = "<absolute>";
+		};
+		91D994F3066E449F007BC8B3 = {
+			isa = PBXFileReference;
+			fileEncoding = 30;
+			lastKnownFileType = sourcecode.cpp.cpp;
+			path = CAComponentDescription.cpp;
+			sourceTree = "<group>";
+		};
+		91D994F4066E449F007BC8B3 = {
+			isa = PBXFileReference;
+			fileEncoding = 30;
+			lastKnownFileType = sourcecode.c.h;
+			path = CAComponentDescription.h;
+			sourceTree = "<group>";
+		};
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8D11072E0486CEB800E47090 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D11072F0486CEB800E47090,
+				91D991BB066D60B8007BC8B3,
+				91D991BC066D60B8007BC8B3,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		080E96DDFE201D6D7F000001 = {
+			isa = PBXGroup;
+			children = (
+				91D9919B066D52FD007BC8B3,
+				91D9919C066D52FD007BC8B3,
+			);
+			name = Classes;
+			sourceTree = "<group>";
+		};
+		1058C7A0FEA54F0111CA2CBB = {
+			isa = PBXGroup;
+			children = (
+				91D991B9066D60B8007BC8B3,
+				91D991BA066D60B8007BC8B3,
+				1058C7A1FEA54F0111CA2CBB,
+			);
+			name = "Linked Frameworks";
+			sourceTree = "<group>";
+		};
+		1058C7A2FEA54F0111CA2CBB = {
+			isa = PBXGroup;
+			children = (
+				29B97325FDCFA39411CA2CEA,
+				29B97324FDCFA39411CA2CEA,
+			);
+			name = "Other Frameworks";
+			sourceTree = "<group>";
+		};
+		19C28FACFE9D520D11CA2CBB = {
+			isa = PBXGroup;
+			children = (
+				8D1107320486CEB800E47090,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		29B97314FDCFA39411CA2CEA = {
+			isa = PBXGroup;
+			children = (
+				91D994EF066E4479007BC8B3,
+				080E96DDFE201D6D7F000001,
+				29B97315FDCFA39411CA2CEA,
+				29B97317FDCFA39411CA2CEA,
+				29B97323FDCFA39411CA2CEA,
+				19C28FACFE9D520D11CA2CBB,
+			);
+			name = MixMash;
+			sourceTree = "<group>";
+		};
+		29B97315FDCFA39411CA2CEA = {
+			isa = PBXGroup;
+			children = (
+				32CA4F630368D1EE00C91783,
+				29B97316FDCFA39411CA2CEA,
+			);
+			name = "Other Sources";
+			sourceTree = "<group>";
+		};
+		29B97317FDCFA39411CA2CEA = {
+			isa = PBXGroup;
+			children = (
+				9152ACC50685A7BD001DF47C,
+				8D1107310486CEB800E47090,
+				089C165CFE840E0CC02AAC07,
+				29B97318FDCFA39411CA2CEA,
+			);
+			name = Resources;
+			sourceTree = "<group>";
+		};
+		29B97323FDCFA39411CA2CEA = {
+			isa = PBXGroup;
+			children = (
+				1058C7A0FEA54F0111CA2CBB,
+				1058C7A2FEA54F0111CA2CBB,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		91D994EF066E4479007BC8B3 = {
+			isa = PBXGroup;
+			children = (
+				91004391066E8836005A1EC3,
+				91D994F3066E449F007BC8B3,
+				91D994F4066E449F007BC8B3,
+			);
+			name = PublicUtility;
+			path = /Developer/Examples/CoreAudio/PublicUtility;
+			sourceTree = "<absolute>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		8D1107270486CEB800E47090 = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D1107280486CEB800E47090,
+				91D9919D066D52FD007BC8B3,
+				91D994F6066E449F007BC8B3,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		8D1107260486CEB800E47090 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F7AD69CB0B8FDD6B00AF225D;
+			buildPhases = (
+				8D1107270486CEB800E47090,
+				8D1107290486CEB800E47090,
+				8D11072C0486CEB800E47090,
+				8D11072E0486CEB800E47090,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MixMash;
+			productInstallPath = "$(HOME)/Applications";
+			productName = MixMash;
+			productReference = 8D1107320486CEB800E47090;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		29B97313FDCFA39411CA2CEA = {
+			isa = PBXProject;
+			buildConfigurationList = F7AD69C70B8FDD6B00AF225D;
+			compatibilityVersion = "Xcode 2.4";
+			hasScannedForEncodings = 1;
+			mainGroup = 29B97314FDCFA39411CA2CEA;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				8D1107260486CEB800E47090,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		8D1107290486CEB800E47090 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D11072A0486CEB800E47090,
+				8D11072B0486CEB800E47090,
+				9152ACC60685A7BD001DF47C,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8D11072C0486CEB800E47090 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D11072D0486CEB800E47090,
+				91D9919E066D52FD007BC8B3,
+				91D994F5066E449F007BC8B3,
+				91004392066E8836005A1EC3,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		089C165CFE840E0CC02AAC07 = {
+			isa = PBXVariantGroup;
+			children = (
+				089C165DFE840E0CC02AAC07,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		29B97318FDCFA39411CA2CEA = {
+			isa = PBXVariantGroup;
+			children = (
+				29B97319FDCFA39411CA2CEA,
+			);
+			name = MainMenu.nib;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		F7AD69C80B8FDD6B00AF225D = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				MACOSX_DEPLOYMENT_TARGET = 10.5;
+				SDKROOT = /Developer/SDKs/MacOSX10.5.sdk;
+			};
+			name = Development;
+		};
+		F7AD69C90B8FDD6B00AF225D = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				MACOSX_DEPLOYMENT_TARGET = 10.5;
+				SDKROOT = /Developer/SDKs/MacOSX10.5.sdk;
+			};
+			name = Deployment;
+		};
+		F7AD69CA0B8FDD6B00AF225D = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				MACOSX_DEPLOYMENT_TARGET = 10.5;
+				SDKROOT = /Developer/SDKs/MacOSX10.5.sdk;
+			};
+			name = Default;
+		};
+		F7AD69CC0B8FDD6B00AF225D = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = MixMash_Prefix.pch;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(HOME)/Applications";
+				PRODUCT_NAME = MixMash;
+				WARNING_CFLAGS = (
+					"-Wmost",
+					"-Wno-four-char-constants",
+					"-Wno-unknown-pragmas",
+				);
+				WRAPPER_EXTENSION = app;
+			};
+			name = Development;
+		};
+		F7AD69CD0B8FDD6B00AF225D = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = MixMash_Prefix.pch;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(HOME)/Applications";
+				PRODUCT_NAME = MixMash;
+				WARNING_CFLAGS = (
+					"-Wmost",
+					"-Wno-four-char-constants",
+					"-Wno-unknown-pragmas",
+				);
+				WRAPPER_EXTENSION = app;
+			};
+			name = Deployment;
+		};
+		F7AD69CE0B8FDD6B00AF225D = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = MixMash_Prefix.pch;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(HOME)/Applications";
+				PRODUCT_NAME = MixMash;
+				WARNING_CFLAGS = (
+					"-Wmost",
+					"-Wno-four-char-constants",
+					"-Wno-unknown-pragmas",
+				);
+				WRAPPER_EXTENSION = app;
+			};
+			name = Default;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F7AD69C70B8FDD6B00AF225D = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F7AD69C80B8FDD6B00AF225D,
+				F7AD69C90B8FDD6B00AF225D,
+				F7AD69CA0B8FDD6B00AF225D,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Default;
+		};
+		F7AD69CB0B8FDD6B00AF225D = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F7AD69CC0B8FDD6B00AF225D,
+				F7AD69CD0B8FDD6B00AF225D,
+				F7AD69CE0B8FDD6B00AF225D,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Default;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 29B97313FDCFA39411CA2CEA;
+}

@@ -1,39 +1,42 @@
-/*	Copyright: 	© Copyright 2005 Apple Computer, Inc. All rights reserved.
-
-	Disclaimer:	IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc.
-			("Apple") in consideration of your agreement to the following terms, and your
-			use, installation, modification or redistribution of this Apple software
-			constitutes acceptance of these terms.  If you do not agree with these terms,
-			please do not use, install, modify or redistribute this Apple software.
-
-			In consideration of your agreement to abide by the following terms, and subject
-			to these terms, Apple grants you a personal, non-exclusive license, under AppleÕs
-			copyrights in this original Apple software (the "Apple Software"), to use,
-			reproduce, modify and redistribute the Apple Software, with or without
-			modifications, in source and/or binary forms; provided that if you redistribute
-			the Apple Software in its entirety and without modifications, you must retain
-			this notice and the following text and disclaimers in all such redistributions of
-			the Apple Software.  Neither the name, trademarks, service marks or logos of
-			Apple Computer, Inc. may be used to endorse or promote products derived from the
-			Apple Software without specific prior written permission from Apple.  Except as
-			expressly stated in this notice, no other rights or licenses, express or implied,
-			are granted by Apple herein, including but not limited to any patent rights that
-			may be infringed by your derivative works or by other works in which the Apple
-			Software may be incorporated.
-
-			The Apple Software is provided by Apple on an "AS IS" basis.  APPLE MAKES NO
-			WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED
-			WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-			PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN
-			COMBINATION WITH YOUR PRODUCTS.
-
-			IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR
-			CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-			GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-			ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION
-			OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT
-			(INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN
-			ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+/*	Copyright © 2007 Apple Inc. All Rights Reserved.
+	
+	Disclaimer: IMPORTANT:  This Apple software is supplied to you by 
+			Apple Inc. ("Apple") in consideration of your agreement to the
+			following terms, and your use, installation, modification or
+			redistribution of this Apple software constitutes acceptance of these
+			terms.  If you do not agree with these terms, please do not use,
+			install, modify or redistribute this Apple software.
+			
+			In consideration of your agreement to abide by the following terms, and
+			subject to these terms, Apple grants you a personal, non-exclusive
+			license, under Apple's copyrights in this original Apple software (the
+			"Apple Software"), to use, reproduce, modify and redistribute the Apple
+			Software, with or without modifications, in source and/or binary forms;
+			provided that if you redistribute the Apple Software in its entirety and
+			without modifications, you must retain this notice and the following
+			text and disclaimers in all such redistributions of the Apple Software. 
+			Neither the name, trademarks, service marks or logos of Apple Inc. 
+			may be used to endorse or promote products derived from the Apple
+			Software without specific prior written permission from Apple.  Except
+			as expressly stated in this notice, no other rights or licenses, express
+			or implied, are granted by Apple herein, including but not limited to
+			any patent rights that may be infringed by your derivative works or by
+			other works in which the Apple Software may be incorporated.
+			
+			The Apple Software is provided by Apple on an "AS IS" basis.  APPLE
+			MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION
+			THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS
+			FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND
+			OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS.
+			
+			IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL
+			OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+			SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+			INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION,
+			MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED
+			AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE),
+			STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE
+			POSSIBILITY OF SUCH DAMAGE.
 */
 /*
 	This is a more complex version of the ConvertFile call - see UseExtAF first
@@ -59,13 +62,14 @@ int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fi
 
 struct AudioFileIO
 {
-	AudioFileID afid;
-	SInt64 pos;
-	char *srcBuffer;
-	UInt32 srcBufferSize;
+	AudioFileID		afid;
+	SInt64			pos;
+	char *			srcBuffer;
+	UInt32			srcBufferSize;
 	CAStreamBasicDescription srcFormat;
-	UInt32	srcSizePerPacket;
-	bool	srcIsVBR;
+	UInt32			srcSizePerPacket;
+	UInt32			numPacketsPerRead;
+	AudioStreamPacketDescription * pktDescs;
 };
 
 // input data proc callback
@@ -79,23 +83,20 @@ OSStatus EncoderDataProc(		AudioConverterRef				inAudioConverter,
 	AudioFileIO* afio = (AudioFileIO*)inUserData;
 	
 // figure out how much to read
-	bool needPkts = false;
-
 	UInt32 maxPackets = afio->srcBufferSize / afio->srcSizePerPacket;
-	if (afio->srcIsVBR) {
-		maxPackets = 1;
-		needPkts = true;
-	}
 	if (*ioNumberDataPackets > maxPackets) *ioNumberDataPackets = maxPackets;
-
-    static AudioStreamPacketDescription	outPacketDesc;
 
 // read from the file
 
 	UInt32 outNumBytes;
-	OSStatus err = AudioFileReadPackets(afio->afid, false, &outNumBytes, (needPkts ? &outPacketDesc : NULL), afio->pos, ioNumberDataPackets, afio->srcBuffer);
+	OSStatus err = AudioFileReadPackets(afio->afid, false, &outNumBytes, afio->pktDescs, 
+												afio->pos, ioNumberDataPackets, afio->srcBuffer);
 	if (err == eofErr) err = noErr;
-
+	if (err) {
+		printf ("Input Proc Read error: %ld (%4.4s)\n", err, (char*)&err);
+		return err;
+	}
+	
 //	printf ("Input Proc: Read %ld packets, size: %ld\n", *ioNumberDataPackets, afio->pos, outNumBytes);
 	
 // advance input file packet position
@@ -106,16 +107,35 @@ OSStatus EncoderDataProc(		AudioConverterRef				inAudioConverter,
 
 	ioData->mBuffers[0].mData = afio->srcBuffer;
 	ioData->mBuffers[0].mDataByteSize = outNumBytes;
-	ioData->mBuffers[0].mNumberChannels = 2;
+	ioData->mBuffers[0].mNumberChannels = afio->srcFormat.mChannelsPerFrame;
 
 	if (outDataPacketDescription) {
-		if (needPkts)
-			*outDataPacketDescription = &outPacketDesc;
-		else 
-			*outDataPacketDescription = 0;
+		if (afio->pktDescs)
+			*outDataPacketDescription = afio->pktDescs;
+		else
+			*outDataPacketDescription = NULL;
 	}
-	
+		
 	return err;
+}
+
+void	WriteCookie (AudioConverterRef converter, AudioFileID outfile)
+{
+// grab the cookie from the converter and write it to the file
+	UInt32 cookieSize = 0;
+	OSStatus err = AudioConverterGetPropertyInfo(converter, kAudioConverterCompressionMagicCookie, &cookieSize, NULL);
+		// if there is an error here, then the format doesn't have a cookie, so on we go
+	if (!err && cookieSize) {
+		char* cookie = new char [cookieSize];
+		
+		err = AudioConverterGetProperty(converter, kAudioConverterCompressionMagicCookie, &cookieSize, cookie);
+		XThrowIfError (err, "Get Cookie From AudioConverter");
+	
+		err = AudioFileSetProperty (outfile, kAudioFilePropertyMagicCookieData, cookieSize, cookie);
+			// even though some formats have cookies, some files don't take them
+		
+		delete [] cookie;
+	}
 }
 
 int ConvertFile (FSRef							&inputFSRef, 
@@ -134,20 +154,24 @@ int ConvertFile (FSRef							&inputFSRef,
 	UInt32 size = sizeof(inputFormat);
 	err = AudioFileGetProperty(infile, kAudioFilePropertyDataFormat, &size, &inputFormat);
 	XThrowIfError (err, "AudioFileGetProperty kAudioFilePropertyDataFormat");
-	printf ("Source File format: "); inputFormat.Print();
-	printf ("Dest File format: "); outputFormat.Print();
 	
 // create the AudioConverter
 
 	AudioConverterRef converter;
 	err = AudioConverterNew(&inputFormat, &outputFormat, &converter);
-	//printf("AudioConverterNew err %4.4s %08X %d\n", &err, err, err);
 	XThrowIfError (err, "AudioConverterNew");
 
 // get the actual output format
+	size = sizeof(inputFormat);
+	err = AudioConverterGetProperty(converter, kAudioConverterCurrentInputStreamDescription, &size, &inputFormat);
+	XThrowIfError (err, "get kAudioConverterCurrentInputStreamDescription");
+
 	size = sizeof(outputFormat);
 	err = AudioConverterGetProperty(converter, kAudioConverterCurrentOutputStreamDescription, &size, &outputFormat);
 	XThrowIfError (err, "get kAudioConverterCurrentOutputStreamDescription");
+
+	printf ("Source File format: "); inputFormat.Print();
+	printf ("Dest File format: "); outputFormat.Print();
 
 	CFStringRef cfName = CFStringCreateWithCString (NULL, fname, kCFStringEncodingUTF8);
 	FSRef fsRef;
@@ -156,44 +180,44 @@ int ConvertFile (FSRef							&inputFSRef,
 	XThrowIfError (err, "AudioFileCreate");
 
 // set up buffers and data proc info struct
-	UInt32 kSrcBufSize = 32768;
-	char srcBuffer[kSrcBufSize];
-	SInt64 pos = 0;
 	AudioFileIO afio;
 	afio.afid = infile;
-	afio.srcBuffer = srcBuffer;
-	afio.srcBufferSize = kSrcBufSize;
+	afio.srcBufferSize = 32768;
+	afio.srcBuffer = new char [ afio.srcBufferSize ];
 	afio.pos = 0;
 	afio.srcFormat = inputFormat;
-	
+		
 	if (inputFormat.mBytesPerPacket == 0) {
 		// format is VBR, so we need to get max size per packet
 		size = sizeof(afio.srcSizePerPacket);
-		err = AudioConverterGetProperty(converter, kAudioConverterPropertyMaximumOutputPacketSize, &size, &afio.srcSizePerPacket);
-		XThrowIfError (err, "MaximumOutputPacketSize::Input Format");
-		afio.srcIsVBR = true;
+		err = AudioFileGetProperty(infile, kAudioFilePropertyPacketSizeUpperBound, &size, &afio.srcSizePerPacket);
+		XThrowIfError (err, "kAudioFilePropertyPacketSizeUpperBound");
+		afio.numPacketsPerRead = afio.srcBufferSize / afio.srcSizePerPacket;
+		afio.pktDescs = new AudioStreamPacketDescription [afio.numPacketsPerRead];
 	}
 	else {
 		afio.srcSizePerPacket = inputFormat.mBytesPerPacket;
-		afio.srcIsVBR = false;
-	}
-	
-// grab the cookie from the converter and write it to the file
-	UInt32 cookieSize = 0;
-	err = AudioConverterGetPropertyInfo(converter, kAudioConverterCompressionMagicCookie, &cookieSize, NULL);
-		// if there is an error here, then the format doesn't have a cookie, so on we go
-	if (!err && cookieSize) {
-		char* cookie = new char [cookieSize];
-		
-		err = AudioConverterGetProperty(converter, kAudioConverterCompressionMagicCookie, &cookieSize, cookie);
-		XThrowIfError (err, "Get Cookie From AudioConverter");
-	
-		err = AudioFileSetProperty (outfile, kAudioFilePropertyMagicCookieData, cookieSize, cookie);
-			// even though some formats have cookies, some files don't take them
-		
-		delete [] cookie;
+		afio.numPacketsPerRead = afio.srcBufferSize / afio.srcSizePerPacket;
+		afio.pktDescs = NULL;
 	}
 
+// set up our output buffers
+	AudioStreamPacketDescription* outputPktDescs = NULL;
+	int outputSizePerPacket = outputFormat.mBytesPerPacket; // this will be non-zero of the format is CBR
+	UInt32 theOutputBufSize = 32768;
+	char* outputBuffer = new char[theOutputBufSize];
+	
+	if (outputSizePerPacket == 0) {
+		UInt32 size = sizeof(outputSizePerPacket);
+		err = AudioConverterGetProperty(converter, kAudioConverterPropertyMaximumOutputPacketSize, &size, &outputSizePerPacket);
+		XThrowIfError (err, "Get Max Packet Size");
+					
+		outputPktDescs = new AudioStreamPacketDescription [theOutputBufSize / outputSizePerPacket];
+	}
+	UInt32 numOutputPackets = theOutputBufSize / outputSizePerPacket;
+
+	WriteCookie (converter, outfile);
+	
 // write dest channel layout
 	if (inputFormat.mChannelsPerFrame > 2) {
 		UInt32 layoutSize = 0;
@@ -225,36 +249,10 @@ int ConvertFile (FSRef							&inputFSRef,
 			delete [] layout;
 		}
 	}
-		
-// what's the size we need per packet of output data?
-	int sizePerPacket = outputFormat.mBytesPerPacket; // this will be non-zero of the format is CBR
-	UInt32 numPackets;
-	UInt32 theOutputBufSize = 32768;
-	
-// if we have a VBR format, we need packet descriptions as well.
-	AudioStreamPacketDescription* pktDescs = NULL;
-	
-	if (sizePerPacket == 0) { // we have a VBR format, what's the max packet size?
-		UInt32 size = sizeof(sizePerPacket);
-		err = AudioConverterGetProperty(converter, kAudioConverterPropertyMaximumOutputPacketSize, &size, &sizePerPacket);
-		XThrowIfError (err, "Get Max Packet Size");
-	
-		if (sizePerPacket > 32768)
-			theOutputBufSize = sizePerPacket;
-
-		numPackets = theOutputBufSize / sizePerPacket;
-		pktDescs = new AudioStreamPacketDescription [numPackets];
-		
-	} else {
-		numPackets = theOutputBufSize / sizePerPacket;
-	}
-
-// now, set up our output buffers
-	char* outputBuffer = new char[theOutputBufSize];
-
 	
 // loop to convert data
 	UInt64 totalOutputFrames = 0;
+	SInt64 outputPos = 0;
 	
 	while (1) {
 
@@ -267,8 +265,8 @@ int ConvertFile (FSRef							&inputFSRef,
 		fillBufList.mBuffers[0].mData = outputBuffer;
 
 // convert data
-		UInt32 ioOutputDataPackets = numPackets;
-		err = AudioConverterFillComplexBuffer(converter, EncoderDataProc, &afio, &ioOutputDataPackets, &fillBufList, pktDescs);
+		UInt32 ioOutputDataPackets = numOutputPackets;
+		err = AudioConverterFillComplexBuffer(converter, EncoderDataProc, &afio, &ioOutputDataPackets, &fillBufList, outputPktDescs);
 		XThrowIfError (err, "AudioConverterFillComplexBuffer");	
 		if (ioOutputDataPackets == 0) {
 			// this is the EOF conditon
@@ -277,11 +275,11 @@ int ConvertFile (FSRef							&inputFSRef,
 
 // write to output file
 		UInt32 inNumBytes = fillBufList.mBuffers[0].mDataByteSize;
-		err = AudioFileWritePackets(outfile, false, inNumBytes, pktDescs, pos, &ioOutputDataPackets, outputBuffer);
+		err = AudioFileWritePackets(outfile, false, inNumBytes, outputPktDescs, outputPos, &ioOutputDataPackets, outputBuffer);
 		XThrowIfError (err, "AudioFileWritePackets");	
 		
 // advance output file packet position
-		pos += ioOutputDataPackets;
+		outputPos += ioOutputDataPackets;
 
 //		printf ("Convert Output: Write %ld packets, size: %ld\n", ioOutputDataPackets, inNumBytes);
 		
@@ -291,7 +289,7 @@ int ConvertFile (FSRef							&inputFSRef,
 		} else {
 				// if there are variable frames per packet, then we have to do this for each packeet
 			for (unsigned int i = 0; i < ioOutputDataPackets; ++i)
-				totalOutputFrames += pktDescs[i].mVariableFramesInPacket;
+				totalOutputFrames += outputPktDescs[i].mVariableFramesInPacket;
 		}
 	}
 
@@ -314,8 +312,12 @@ int ConvertFile (FSRef							&inputFSRef,
 		}
 	}
 	
+		// write the cookie again - sometimes codecs will
+		// update cookies at the end of a conversion
+	WriteCookie (converter, outfile);
+
 // cleanup
-	delete [] pktDescs;
+	delete [] outputPktDescs;
 	delete [] outputBuffer;
 
 	AudioConverterDispose(converter);

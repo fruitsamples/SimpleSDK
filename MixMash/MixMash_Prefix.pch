@@ -1,0 +1,14 @@
+//
+// Prefix header for all source files of the 'MixMash' target in the 'MixMash' project
+//
+
+#ifdef __OBJC__
+    #import <Cocoa/Cocoa.h>
+#endif
+
+#ifdef __cplusplus
+	#include <vector>
+	#include <algorithm>
+#endif
+
+#include <AudioToolbox/AudioToolbox.h>

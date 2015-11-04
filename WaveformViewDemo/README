@@ -1,0 +1,2 @@
+An example of drawing a waveform view from an AUEffectBase.
+Could pass in the view size to do the downsampling there instead of later in the view.

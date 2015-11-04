@@ -1,0 +1,21 @@
+{
+    IBClasses = (
+        {CLASS = FirstResponder; LANGUAGE = ObjC; SUPERCLASS = NSObject; }, 
+        {
+            ACTIONS = {generatePlaylist = id; setFolder = id; togglePlay = id; }; 
+            CLASS = MixMash; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {
+                mFileColumn = NSTableColumn; 
+                mFolderName = NSTextField; 
+                mLengthColumn = NSTableColumn; 
+                mPlayButton = NSButton; 
+                mPlayLocColumn = NSTableColumn; 
+                mPlaylistTable = NSTableView; 
+                mStartColumn = NSTableColumn; 
+            }; 
+            SUPERCLASS = NSObject; 
+        }
+    ); 
+    IBVersion = 1; 
+}

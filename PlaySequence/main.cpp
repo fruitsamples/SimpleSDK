@@ -1,39 +1,42 @@
-/*	Copyright: 	© Copyright 2005 Apple Computer, Inc. All rights reserved.
-
-	Disclaimer:	IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc.
-			("Apple") in consideration of your agreement to the following terms, and your
-			use, installation, modification or redistribution of this Apple software
-			constitutes acceptance of these terms.  If you do not agree with these terms,
-			please do not use, install, modify or redistribute this Apple software.
-
-			In consideration of your agreement to abide by the following terms, and subject
-			to these terms, Apple grants you a personal, non-exclusive license, under Apple’s
-			copyrights in this original Apple software (the "Apple Software"), to use,
-			reproduce, modify and redistribute the Apple Software, with or without
-			modifications, in source and/or binary forms; provided that if you redistribute
-			the Apple Software in its entirety and without modifications, you must retain
-			this notice and the following text and disclaimers in all such redistributions of
-			the Apple Software.  Neither the name, trademarks, service marks or logos of
-			Apple Computer, Inc. may be used to endorse or promote products derived from the
-			Apple Software without specific prior written permission from Apple.  Except as
-			expressly stated in this notice, no other rights or licenses, express or implied,
-			are granted by Apple herein, including but not limited to any patent rights that
-			may be infringed by your derivative works or by other works in which the Apple
-			Software may be incorporated.
-
-			The Apple Software is provided by Apple on an "AS IS" basis.  APPLE MAKES NO
-			WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED
-			WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-			PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN
-			COMBINATION WITH YOUR PRODUCTS.
-
-			IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR
-			CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-			GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-			ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION
-			OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT
-			(INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN
-			ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+/*	Copyright © 2007 Apple Inc. All Rights Reserved.
+	
+	Disclaimer: IMPORTANT:  This Apple software is supplied to you by 
+			Apple Inc. ("Apple") in consideration of your agreement to the
+			following terms, and your use, installation, modification or
+			redistribution of this Apple software constitutes acceptance of these
+			terms.  If you do not agree with these terms, please do not use,
+			install, modify or redistribute this Apple software.
+			
+			In consideration of your agreement to abide by the following terms, and
+			subject to these terms, Apple grants you a personal, non-exclusive
+			license, under Apple's copyrights in this original Apple software (the
+			"Apple Software"), to use, reproduce, modify and redistribute the Apple
+			Software, with or without modifications, in source and/or binary forms;
+			provided that if you redistribute the Apple Software in its entirety and
+			without modifications, you must retain this notice and the following
+			text and disclaimers in all such redistributions of the Apple Software. 
+			Neither the name, trademarks, service marks or logos of Apple Inc. 
+			may be used to endorse or promote products derived from the Apple
+			Software without specific prior written permission from Apple.  Except
+			as expressly stated in this notice, no other rights or licenses, express
+			or implied, are granted by Apple herein, including but not limited to
+			any patent rights that may be infringed by your derivative works or by
+			other works in which the Apple Software may be incorporated.
+			
+			The Apple Software is provided by Apple on an "AS IS" basis.  APPLE
+			MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION
+			THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS
+			FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND
+			OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS.
+			
+			IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL
+			OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+			SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+			INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION,
+			MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED
+			AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE),
+			STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE
+			POSSIBILITY OF SUCH DAMAGE.
 */
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreServices/CoreServices.h>
@@ -133,6 +136,8 @@ static char* usageStr = "Usage: PlaySequence\n\t"
 UInt32 didOverload = 0;
 UInt64	overloadTime = 0;
 UInt64	startRunningTime;
+
+Float32 maxCPULoad = .8;
 
 int main (int argc, const char * argv[]) 
 {
@@ -243,7 +248,16 @@ malformedInput:
 	{
         AUGraph graph = 0;
         AudioUnit theSynth = 0;
-        
+		
+		require_noerr (result = MusicSequenceGetAUGraph (sequence, &graph), fail);
+		require_noerr (result = AUGraphOpen (graph), fail);     
+		  
+		require_noerr (result = GetSynthFromGraph (graph, theSynth), fail);
+		require_noerr (result = AudioUnitSetProperty (theSynth,
+										kAudioUnitProperty_CPULoad,
+										kAudioUnitScope_Global, 0,
+										&maxCPULoad, sizeof(maxCPULoad)), fail);
+
         if (shouldUseMIDIEndpoint) 
 		{
 			MIDIClientRef	theMidiClient;
@@ -258,14 +272,7 @@ malformedInput:
             require_noerr (result = MusicSequenceSetMIDIEndpoint (sequence, MIDIGetDestination(0)), fail);
         } 
 		else 
-		{    			
-			require_noerr (result = MusicSequenceGetAUGraph (sequence, &graph), fail);
-			
-			require_noerr (result = AUGraphOpen (graph), fail);
-			
-			if (shouldSetBank || diskStream || outputFilePath)
-				require_noerr (result = GetSynthFromGraph (graph, theSynth), fail);
-
+		{   
 			if (shouldSetBank) {                
 				FSRef soundBankRef;
 				require_noerr (result = FSPathMakeRef ((const UInt8*)bankPath, &soundBankRef, 0), fail);
@@ -423,11 +430,11 @@ OSStatus GetSynthFromGraph (AUGraph& inGraph, AudioUnit& outSynth)
 		require_noerr (result = AUGraphGetIndNode(inGraph, i, &node), fail);
 
 		ComponentDescription desc;
-		require_noerr (result = AUGraphGetNodeInfo(inGraph, node, &desc, 0, 0, 0), fail);
+		require_noerr (result = AUGraphNodeInfo(inGraph, node, &desc, 0), fail);
 		
 		if (desc.componentType == kAudioUnitType_MusicDevice) 
 		{
-			require_noerr (result = AUGraphGetNodeInfo(inGraph, node, 0, 0, 0, &outSynth), fail);
+			require_noerr (result = AUGraphNodeInfo(inGraph, node, 0, &outSynth), fail);
 			return noErr;
 		}
 	}
@@ -466,13 +473,13 @@ OSStatus SetUpGraph (AUGraph &inGraph, UInt32 numFrames, Float64 &sampleRate, bo
 
 		ComponentDescription desc;
 		AudioUnit unit;
-		require_noerr (result = AUGraphGetNodeInfo(inGraph, node, &desc, 0, 0, &unit), home);
+		require_noerr (result = AUGraphNodeInfo(inGraph, node, &desc, &unit), home);
 		
 		if (desc.componentType == kAudioUnitType_Output) 
 		{
 			if (outputUnit == 0) {
 				outputUnit = unit;
-				require_noerr (result = AUGraphGetNodeInfo(inGraph, node, 0, 0, 0, &outputUnit), home);
+				require_noerr (result = AUGraphNodeInfo(inGraph, node, 0, &outputUnit), home);
 				
 				if (!isOffline) {
 					// these two properties are only applicable if its a device we're playing too
@@ -497,8 +504,8 @@ OSStatus SetUpGraph (AUGraph &inGraph, UInt32 numFrames, Float64 &sampleRate, bo
 						// remove device output node and add generic output
 					require_noerr (result = AUGraphRemoveNode (inGraph, node), home);
 					desc.componentSubType = kAudioUnitSubType_GenericOutput;
-					require_noerr (result = AUGraphNewNode (inGraph, &desc, 0, NULL, &node), home);
-					require_noerr (result = AUGraphGetNodeInfo(inGraph, node, NULL, NULL, NULL, &unit), home);
+					require_noerr (result = AUGraphAddNode (inGraph, &desc, &node), home);
+					require_noerr (result = AUGraphNodeInfo(inGraph, node, NULL, &unit), home);
 					outputUnit = unit;
 					outputNode = node;
 					
@@ -544,11 +551,10 @@ OSStatus LoadSMF(const char *filename, MusicSequence& sequence, MusicSequenceLoa
 	OSStatus result = noErr;
 	
 	require_noerr (result = NewMusicSequence(&sequence), home);
-
-	FSRef fsRef;
-	require_noerr (result = FSPathMakeRef ((const UInt8*)filename, &fsRef, 0), home);
 	
-	require_noerr (result = MusicSequenceLoadSMFWithFlags (sequence, &fsRef, loadFlags), home);
+	CFURLRef url = CFURLCreateFromFileSystemRepresentation(kCFAllocatorDefault, (const UInt8*)filename, strlen(filename), false);
+	
+	require_noerr (result = MusicSequenceFileLoad (sequence, url, 0, loadFlags), home);
 	
 home:
 	return result;
@@ -639,11 +645,11 @@ void WriteOutputFile (const char*	outputFilePath,
 		require_noerr (result = AUGraphGetIndNode(inGraph, i, &node), fail);
 
 		ComponentDescription desc;
-		require_noerr (result = AUGraphGetNodeInfo(inGraph, node, &desc, 0, 0, NULL), fail);
+		require_noerr (result = AUGraphNodeInfo(inGraph, node, &desc, NULL), fail);
 		
 		if (desc.componentType == kAudioUnitType_Output) 
 		{
-			require_noerr (result = AUGraphGetNodeInfo(inGraph, node, 0, 0, 0, &outputUnit), fail);
+			require_noerr (result = AUGraphNodeInfo(inGraph, node, 0, &outputUnit), fail);
 			break;
 		}
 	}

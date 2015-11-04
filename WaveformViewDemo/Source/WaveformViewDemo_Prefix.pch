@@ -1,0 +1,5 @@
+//
+// Prefix header for all source files of the 'WaveformViewDemo' target in the 'WaveformViewDemo' project.
+//
+
+#include <CoreServices/CoreServices.h>

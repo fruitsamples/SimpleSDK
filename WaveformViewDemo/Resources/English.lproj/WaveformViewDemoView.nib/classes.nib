@@ -1,0 +1,36 @@
+{
+    IBClasses = (
+        {CLASS = CAVUMeterView; LANGUAGE = ObjC; SUPERCLASS = NSView; }, 
+        {
+            ACTIONS = {changeBackgroundColor = id; changeLineColor = id; }; 
+            CLASS = CAWaveformView; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {
+                myBackgroundWell = NSColorWell; 
+                myHoldButton = NSButton; 
+                myLineWell = NSColorWell; 
+            }; 
+            SUPERCLASS = NSView; 
+        }, 
+        {
+            CLASS = CocoaViewFactory; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {uiFreshlyLoadedView = CocoaView; }; 
+            SUPERCLASS = NSObject; 
+        }, 
+        {CLASS = FirstResponder; LANGUAGE = ObjC; SUPERCLASS = NSObject; }, 
+        {
+            CLASS = WaveformViewDemoView; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {uiWaveformView = CAWaveformView; }; 
+            SUPERCLASS = NSView; 
+        }, 
+        {
+            CLASS = WaveformViewDemoViewFactory; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {uiFreshlyLoadedView = id; }; 
+            SUPERCLASS = NSObject; 
+        }
+    ); 
+    IBVersion = 1; 
+}
