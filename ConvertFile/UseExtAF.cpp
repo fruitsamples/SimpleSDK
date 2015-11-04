@@ -47,7 +47,11 @@
 #include "CAXException.h"
 
 
-int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fileType, FSRef &dirFSRef, char* fname)
+int ConvertFile (FSRef							&inputFSRef, 
+					OSType						fileType, 
+					FSRef						&dirFSRef, 
+					char*						fname, 
+					CAStreamBasicDescription	&outputFormat)
 {
 	ExtAudioFileRef infile, outfile;
 
@@ -61,23 +65,6 @@ int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fi
 	err = ExtAudioFileGetProperty(infile, kExtAudioFileProperty_FileDataFormat, &size, &inputFormat);
 	XThrowIfError (err, "ExtAudioFileGetProperty kExtAudioFileProperty_FileDataFormat");
 	printf ("Source File format: "); inputFormat.Print();
-
-// set up the output file format
-	CAStreamBasicDescription outputFormat;	
-	
-	if (format) {
-		// need to set at least these fields for kAudioFormatProperty_FormatInfo
-		outputFormat.mFormatID = format;
-		outputFormat.mSampleRate = inputFormat.mSampleRate;
-		outputFormat.mChannelsPerFrame = inputFormat.mChannelsPerFrame;
-		
-	// use AudioFormat API to fill out the rest.
-		size = sizeof(outputFormat);
-		err = AudioFormatGetProperty(kAudioFormatProperty_FormatInfo, 0, NULL, &size, &outputFormat);
-	} else {
-		outputFormat = inputFormat;
-		outputFormat.mSampleRate = sampleRate;
-	}
 	printf ("Dest File format: "); outputFormat.Print();
 
 // create the output file 
@@ -86,13 +73,14 @@ int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fi
 	CFRelease (cfName);
 	XThrowIfError (err, "ExtAudioFileCreateNew");
 	
-// get and set the client format:
-	size = sizeof(inputFormat);
-	err = ExtAudioFileSetProperty(infile, kExtAudioFileProperty_ClientDataFormat, size, &inputFormat);
+// get and set the client format - it should be lpcm
+	CAStreamBasicDescription clientFormat = (inputFormat.mFormatID == kAudioFormatLinearPCM ? inputFormat : outputFormat);
+	size = sizeof(clientFormat);
+	err = ExtAudioFileSetProperty(infile, kExtAudioFileProperty_ClientDataFormat, size, &clientFormat);
 	XThrowIfError (err, "ExtAudioFileGetProperty kExtAudioFileProperty_ClientDataFormat");
 	
-	size = sizeof(inputFormat);
-	err = ExtAudioFileSetProperty(outfile, kExtAudioFileProperty_ClientDataFormat, size, &inputFormat);
+	size = sizeof(clientFormat);
+	err = ExtAudioFileSetProperty(outfile, kExtAudioFileProperty_ClientDataFormat, size, &clientFormat);
 	XThrowIfError (err, "ExtAudioFileGetProperty kExtAudioFileProperty_ClientDataFormat");
 
 // set up buffers

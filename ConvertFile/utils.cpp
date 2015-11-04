@@ -42,9 +42,14 @@
 
 #include <AudioToolbox/AudioToolbox.h>
 #include "CAXException.h"
+#include "CAStreamBasicDescription.h"
 
 // external to this file the following function needs to be defined
-extern int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fileType, FSRef &dirFSRef, char* fname);
+extern int ConvertFile (FSRef					&inputFSRef, 
+					OSType						fileType, 
+					FSRef						&dirFSRef, 
+					char*						fname, 
+					CAStreamBasicDescription	&outputFormat);
 
 
 bool TestFile (const char* fname, bool inDelete)
@@ -66,12 +71,13 @@ bool TestFile (const char* fname, bool inDelete)
 
 void UsageString(int exitCode)
 {
-	printf ("Usage: ConvertFile [path to existing input file] [-d formatID] [-f fileType] [-r sampleRate] [-h]\n");
-	printf ("    if no input file is specified, then expects: /tmp/infile.aiff to exist\n");
-	printf ("        (and will write .caf with ima4)\n");
+	printf ("Usage: ConvertFile /path/to/input/file [-d formatID] [-f fileType] [-r sampleRate] [-h]\n");
 	printf ("    output file written is /tmp/outfile.<EXT FOR FORMAT>\n");
 	printf ("    if -d is specified, out file is written with that format\n");
-	printf ("    if -r is specified, input file's format ('lpcm') is written but with new sample rate\n");
+	printf ("       if no format is specified and input file is 'lpcm', IMA is written\n");
+	printf ("       if input file is compressed (ie. not 'lpcm'), then 'lpcm' is written\n");
+	printf ("    if -r is specified, input file's format must be ('lpcm') and output is written with new sample rate\n");
+	printf ("    if -f is not specified, CAF File is written ('caff')\n");
 	exit(exitCode);
 }
 
@@ -115,15 +121,17 @@ void ParseArgs (int argc, char * const argv[],
 									FSRef	& outDirFSRef,
 									char	* outFname)
 {
+	if (argc < 2) UsageString(1);
+	
 	// first validate our initial condition
-	const char* inputFile = argc == 1 ? "/tmp/infile.aiff" : argv[1];
+	const char* inputFile = argv[1];
 	
 	if (!TestFile (inputFile, false)) {
 		printf ("* * Problem with input file\n"); 
 		UsageString(1);
 	}
-		
-		// look to see if a format or different file output has been specified
+
+	// look to see if a format or different file output has been specified
 	for (int i = 2; i < argc; ++i) {
 		if (!strcmp ("-d", argv[i])) {
 			str2OSType (argv[++i], outFormat);
@@ -158,12 +166,11 @@ void ParseArgs (int argc, char * const argv[],
 	Boolean res = CFStringGetCString(ext, extstr, 32, kCFStringEncodingUTF8);
 	XThrowIfError (!res, "CFStringGetCString");
 	
-		// release the array as we're done with this now
+	// release the array as we're done with this now
 	CFRelease (extensions);
 
 	sprintf (outFname, "/tmp/outfile.%s", extstr);
-	TestFile (outFname, true);
-	
+	TestFile (outFname, true);	
 
 //  input file.
 	CFStringRef filename = CFStringCreateWithCString (NULL, inputFile, kCFStringEncodingUTF8);
@@ -177,7 +184,7 @@ void ParseArgs (int argc, char * const argv[],
 // output file
 	CFURLRef dirurl = CFURLCreateWithFileSystemPath (NULL, CFSTR("/tmp"), kCFURLPOSIXPathStyle, true);
 	res = CFURLGetFSRef(dirurl, &outDirFSRef);
-	CFRelease (infileurl);
+	CFRelease (dirurl);
 	XThrowIfError (!res, "CFURLGetFSRef");
 
 		// now we just need the output file
@@ -185,9 +192,70 @@ void ParseArgs (int argc, char * const argv[],
 }
 
 
+void	ConstructOutputFormatFromArgs (FSRef &inputFSRef, OSType format, Float64 sampleRate, CAStreamBasicDescription &outputFormat)
+{
+	AudioFileID infile;	
+	OSStatus err = AudioFileOpen(&inputFSRef, fsRdPerm, 0, &infile);
+	XThrowIfError (err, "AudioFileOpen");
+	
+// get the input file format
+	CAStreamBasicDescription inputFormat;
+	UInt32 size = sizeof(inputFormat);
+	err = AudioFileGetProperty(infile, kAudioFilePropertyDataFormat, &size, &inputFormat);
+	XThrowIfError (err, "AudioFileGetProperty kAudioFilePropertyDataFormat");
+
+	if (inputFormat.mFormatID != kAudioFormatLinearPCM && sampleRate > 0) {
+		printf ("Can only specify sample rate with linear pcm input file\n");
+		UsageString(1);
+	}
+	
+// set up the output file format
+	if (!format) {
+		if (sampleRate > 0) {
+			outputFormat = inputFormat;
+			outputFormat.mSampleRate = sampleRate;
+		} else {
+			if (inputFormat.mFormatID != kAudioFormatLinearPCM)
+				format = kAudioFormatLinearPCM;
+			else
+				format = kAudioFormatAppleIMA4;
+		}
+	}
+		
+	if (format) {
+		if (format == kAudioFormatLinearPCM) {
+			outputFormat.mFormatID = format;
+			outputFormat.mSampleRate = inputFormat.mSampleRate;
+			outputFormat.mChannelsPerFrame = inputFormat.mChannelsPerFrame;
+
+			outputFormat.mBytesPerPacket = inputFormat.mChannelsPerFrame * 2;
+			outputFormat.mFramesPerPacket = 1;
+			outputFormat.mBytesPerFrame = outputFormat.mBytesPerPacket;
+			outputFormat.mBitsPerChannel = 16;
+			
+			outputFormat.mFormatFlags = kLinearPCMFormatFlagIsBigEndian
+									| kLinearPCMFormatFlagIsSignedInteger
+									| kLinearPCMFormatFlagIsPacked;
+			
+		
+		} else {
+			// need to set at least these fields for kAudioFormatProperty_FormatInfo
+			outputFormat.mFormatID = format;
+			outputFormat.mSampleRate = inputFormat.mSampleRate;
+			outputFormat.mChannelsPerFrame = inputFormat.mChannelsPerFrame;
+			
+		// use AudioFormat API to fill out the rest.
+			size = sizeof(outputFormat);
+			err = AudioFormatGetProperty(kAudioFormatProperty_FormatInfo, 0, NULL, &size, &outputFormat);
+		}
+	}
+	
+	AudioFileClose (infile);
+}
+
 int main (int argc, char * const argv[]) 
 {
-	OSType format = kAudioFormatAppleIMA4;
+	OSType format = 0;
 	Float64 sampleRate = 0;
 	OSType fileType = kAudioFileCAFType;
 	FSRef inputFSRef;
@@ -195,7 +263,14 @@ int main (int argc, char * const argv[])
 	char fname[64];
 	
 	ParseArgs (argc, argv, format, sampleRate, fileType, inputFSRef, dirFSRef, fname);
+
+//	printf ("args:%4.4s, sample rate:%.1f, fileType: %4.4s\n", (char*)&format, sampleRate, (char*)&fileType);
+
+	CAStreamBasicDescription outputFormat;	
+	ConstructOutputFormatFromArgs (inputFSRef, format, sampleRate, outputFormat);
 	
-	return ConvertFile (inputFSRef, format, sampleRate, fileType, dirFSRef, fname);
+//	outputFormat.Print();
+	
+	return ConvertFile (inputFSRef, fileType, dirFSRef, fname, outputFormat);
 }
 

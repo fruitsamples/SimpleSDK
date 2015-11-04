@@ -42,22 +42,75 @@
 #include <pthread.h>
 #include <unistd.h>
 
-static OSStatus LoadSMF(const char *filename, MusicSequence& sequence, MusicSequenceLoadFlags loadFlags, bool useV1);
+#include "AUOutputBL.h"
+#include "CAStreamBasicDescription.h"
+
+// file handling utils
+#include "CAAudioFileFormats.h"
+#include "CAFilePathUtils.h"
+
+
+static OSStatus LoadSMF(const char *filename, MusicSequence& sequence, MusicSequenceLoadFlags loadFlags);
 static OSStatus GetSynthFromGraph (AUGraph & inGraph, AudioUnit &outSynth);
-static OSStatus SetFrameSize (AUGraph &inGraph, UInt32 frameSize);
-static OSStatus PathToFS(const char *filename, FSSpec *outSpec, FSRef *outRef);
+static OSStatus SetUpGraph (AUGraph &inGraph, UInt32 numFrames, Float64 &outSampleRate, bool isOffline);
+
+static void WriteOutputFile (const char*	outputFilePath, 
+					OSType			dataFormat, 
+					Float64			srate, 
+					MusicTimeStamp	sequenceLength, 
+					bool			shouldPrint,
+					AUGraph			inGraph,
+					UInt32			numFrames,
+					MusicPlayer		player);
+			
+static void PlayLoop (MusicPlayer &player, AUGraph &graph, MusicTimeStamp sequenceLength, bool shouldPrint, bool waitAtEnd);
+
+
+static void str2OSType (const char * inString, OSType &outType)
+{
+	if (inString == NULL) {
+		outType = 0;
+		return;
+	}
+	
+	size_t len = strlen(inString);
+	if (len <= 4) {
+		char workingString[5];
+		
+		workingString[4] = 0;
+		workingString[0] = workingString[1] = workingString[2] = workingString[3] = ' ';
+		memcpy (workingString, inString, strlen(inString));
+		outType = 	*(workingString + 0) <<	24	|
+					*(workingString + 1) <<	16	|
+					*(workingString + 2) <<	8	|
+					*(workingString + 3);
+		return;
+	}
+
+	if (len <= 8) {
+		if (sscanf (inString, "%lx", &outType) == 0) {
+			printf ("* * Bad conversion for OSType\n"); 
+			exit(1);
+		}
+		return;
+	}
+	printf ("* * Bad conversion for OSType\n"); 
+	exit(1);
+}
+
 
 #define PLAY_CMD 		"[-p] Play the Sequence\n\t"
 #define MIDI_CMD 		"[-e] Use a MIDI Endpoint\n\t"
 #define START_TIME_CMD 	"[-t startTime-Beats]\n\t"
-#define NUM_FRAMES_CMD 	"[-f frameSize] default is 512\n\t"
-#define SRATE_CMD 		"[-s sampleRate] default is 44.1KHz\n\t"
+#define NUM_FRAMES_CMD 	"[-i io Sample Size] default is 512\n\t"
 #define SMF_CHAN_CMD 	"[-c] Will Parse MIDI file into channels\n\t"
-#define NO_PRINT_CMD 	"[-n] Don't print the sequence\n\t"
+#define NO_PRINT_CMD 	"[-n] Don't print\n\t"
 #define BANK_CMD 		"[-b /Path/To/Sound/Bank.dls]\n\t"
 #define DISK_STREAM		"[-d] Turns disk streaming on\n\t"
-#define V1_CMD			"[-v1] Uses V1 version of default graph]\n\t"
-#define WAIT_CMD		"[-w] Play for 10 seconds, then dispose all objects and wait at end]\n\t"
+#define WAIT_CMD		"[-w] Play for 10 seconds, then dispose all objects and wait at end\n\t"
+#define FILE_CMD		"[-f /Path/To/File.<EXT FOR FORMAT> 'data' srate] Create a stereo file where\n\t"
+#define FILE_CMD_1			"\t\t 'data' is the data format (lpcm or a compressed type, like 'aac ')\n\t"
+#define FILE_CMD_2			"\t\t srate is the sample rate\n\t"
 
 #define SRC_FILE_CMD 	"/Path/To/File.mid"
 
@@ -66,19 +119,20 @@ static char* usageStr = "Usage: PlaySequence\n\t"
 				MIDI_CMD
 				START_TIME_CMD
 				NUM_FRAMES_CMD
-				SRATE_CMD
 				SMF_CHAN_CMD
 				NO_PRINT_CMD
 				BANK_CMD
 				DISK_STREAM
-				V1_CMD
 				WAIT_CMD
+				FILE_CMD
+				FILE_CMD_1
+				FILE_CMD_2
 				SRC_FILE_CMD;
 							
-UInt64	startRunningTime;
 
 UInt32 didOverload = 0;
 UInt64	overloadTime = 0;
+UInt64	startRunningTime;
 
 int main (int argc, const char * argv[]) 
 {
@@ -92,16 +146,18 @@ int main (int argc, const char * argv[])
 	bool shouldSetBank = false;
     bool shouldUseMIDIEndpoint = false;
 	bool shouldPrint = true;
-	bool useV1 = false;
-	bool wait = false;
+	bool waitAtEnd = false;
 	bool diskStream = false;
+	
+	OSType dataFormat = 0;
+	Float64 srate = 0;
+	const char* outputFilePath = 0;
 	
 	MusicSequenceLoadFlags	loadFlags = 0;
 	
 	char* bankPath = 0;
 	Float32 startTime = 0;
-	UInt32 frameSize = 512;
-	Float64 sampleRateToUse = 44100;
+	UInt32 numFrames = 512;
 	
 	for (int i = 1; i < argc; ++i)
 	{
@@ -111,7 +167,7 @@ int main (int argc, const char * argv[])
 		}
 		else if (!strcmp ("-w", argv[i]))
 		{
-			wait = true;
+			waitAtEnd = true;
 		}
 		else if (!strcmp ("-d", argv[i]))
 		{
@@ -127,14 +183,9 @@ int main (int argc, const char * argv[])
 		{
 			shouldPrint = false;
 		}
-		else if ((argv[i][0] == '/') && (filePath == 0))
+		else if ((filePath == 0) && (argv[i][0] == '/' || argv[i][0] == '~'))
 		{
 			filePath = const_cast<char*>(argv[i]);
-		}
-		else if (!strcmp ("-s", argv[i])) 
-		{
-			if (++i == argc) goto malformedInput;
-			sscanf (argv[i], "%lf", &sampleRateToUse);
 		}
 		else if (!strcmp ("-t", argv[i])) 
 		{
@@ -149,15 +200,18 @@ int main (int argc, const char * argv[])
         {
             loadFlags = kMusicSequenceLoadSMF_ChannelsToTracks;
         }
-        else if (!strcmp ("-f", argv[i])) 
+        else if (!strcmp ("-i", argv[i])) 
 		{
 			if (++i == argc) goto malformedInput;
-			sscanf (argv[i], "%ld", &frameSize);
+			sscanf (argv[i], "%ld", &numFrames);
 		}
-		else if (!strcmp("-v1", argv[i]))
-        {
-            useV1 = true;
-        }
+        else if (!strcmp ("-f", argv[i])) 
+		{
+			if (i + 3 >= argc) goto malformedInput;
+			outputFilePath = argv[++i];
+			str2OSType (argv[++i], dataFormat);
+			sscanf (argv[++i], "%lf", &srate);
+		}
 		else
 		{
 malformedInput:
@@ -172,10 +226,15 @@ malformedInput:
 		exit (1);
 	}
 	
+	if (shouldUseMIDIEndpoint && outputFilePath) {
+		printf ("can't write a file when you try to play out to a MIDI Endpoint\n");
+		exit (1);
+	}
+	
 	MusicSequence sequence;
 	OSStatus result;
 	
-	require_noerr (result = LoadSMF (filePath, sequence, loadFlags, useV1), fail);
+	require_noerr (result = LoadSMF (filePath, sequence, loadFlags), fail);
 			
 	if (shouldPrint) 
 		CAShow (sequence);
@@ -204,46 +263,46 @@ malformedInput:
 			
 			require_noerr (result = AUGraphOpen (graph), fail);
 			
-			require_noerr (result = GetSynthFromGraph (graph, theSynth), fail);
+			if (shouldSetBank || diskStream || outputFilePath)
+				require_noerr (result = GetSynthFromGraph (graph, theSynth), fail);
 
-            if (shouldSetBank)
-            {                
-                FSSpec soundBankSpec;
+			if (shouldSetBank) {                
 				FSRef soundBankRef;
-				
-                require_noerr (result = PathToFS (bankPath, &soundBankSpec, &soundBankRef), fail);
-                
-                printf ("Setting Sound Bank:%s\n", bankPath);
+				require_noerr (result = FSPathMakeRef ((const UInt8*)bankPath, &soundBankRef, 0), fail);
+								
+				printf ("Setting Sound Bank:%s\n", bankPath);
 					
-					// try the FSRef property first (as FSSpec's are deprecated with Tiger)
-                if (result = AudioUnitSetProperty (theSynth,
-										kMusicDeviceProperty_SoundBankFSRef,
-										kAudioUnitScope_Global, 0,
-										&soundBankRef, sizeof(soundBankRef)))
-				{
-					require_noerr (result = AudioUnitSetProperty (theSynth,
-											kMusicDeviceProperty_SoundBankFSSpec,
-											kAudioUnitScope_Global, 0,
-											&soundBankSpec, sizeof(soundBankSpec)), fail);
-				}
+				require_noerr (result = AudioUnitSetProperty (theSynth,
+												kMusicDeviceProperty_SoundBankFSRef,
+												kAudioUnitScope_Global, 0,
+												&soundBankRef, sizeof(soundBankRef)), fail);
 			}
-			
-			require_noerr (result = AudioUnitSetProperty (theSynth,
-									kAudioUnitProperty_SampleRate,
-									kAudioUnitScope_Output, 0,
-									&sampleRateToUse, sizeof(sampleRateToUse)), fail);
-			
+						
 			if (diskStream) {
 				UInt32 value = diskStream;
 				require_noerr (result = AudioUnitSetProperty (theSynth,
-									kMusicDeviceProperty_StreamFromDisk,
-									kAudioUnitScope_Global, 0,
-									&value, sizeof(value)), fail);
+											kMusicDeviceProperty_StreamFromDisk,
+											kAudioUnitScope_Global, 0,
+											&value, sizeof(value)), fail);
 			}
-									
-			require_noerr (result = AUGraphInitialize (graph), fail);
 
-			require_noerr (result = SetFrameSize (graph, frameSize), fail);
+			if (outputFilePath) {
+				// need to tell synth that is going to render a file.
+				UInt32 value = 1;
+				require_noerr (result = AudioUnitSetProperty (theSynth,
+												kAudioUnitProperty_OfflineRender,
+												kAudioUnitScope_Global, 0,
+												&value, sizeof(value)), fail);
+			}
+			
+			require_noerr (result = SetUpGraph (graph, numFrames, srate, (outputFilePath != NULL)), fail);
+			
+			if (shouldPrint) {
+				printf ("Sample Rate: %.1f \n", srate);
+				printf ("Disk Streaming is enabled: %c\n", (diskStream ? 'T' : 'F'));
+			}
+			
+			require_noerr (result = AUGraphInitialize (graph), fail);
 
             if (shouldPrint)
 				CAShow (graph);
@@ -269,24 +328,15 @@ malformedInput:
 				sequenceLength = trackLength;
 		}
 	
-	// now I'm going to add 10 beats on the end for the reverb/long releases to tail off...
-		sequenceLength += 10;
+	// now I'm going to add 8 beats on the end for the reverb/long releases to tail off...
+		sequenceLength += 8;
 		
 		require_noerr (result = MusicPlayerSetTime (player, startTime), fail);
 		
 		require_noerr (result = MusicPlayerPreroll (player), fail);
 		
 		if (shouldPrint) {
-			if (!shouldUseMIDIEndpoint) {
-				UInt32 value;
-				UInt32 size = sizeof(value);
-				require_noerr (result = AudioUnitGetProperty (theSynth,
-									kMusicDeviceProperty_StreamFromDisk,
-									kAudioUnitScope_Global, 0,
-									&value, &size), fail);
-				printf ("Disk Streaming is enabled: %c\n", (value ? 'T' : 'F'));
-			}
-			printf ("Ready to play <%f beats>:%s\n\t<Enter> to continue: ", startTime, filePath); 
+			printf ("Ready to play: %s, %.2f beats long\n\t<Enter> to continue: ", filePath, sequenceLength); 
 
 			getc(stdin);
 		}
@@ -294,57 +344,25 @@ malformedInput:
 		startRunningTime = AudioGetCurrentHostTime ();
 		
 		require_noerr (result = MusicPlayerStart (player), fail);
-
-		if (shouldPrint) {
-			MusicTimeStamp time;
-			require_noerr (result = MusicPlayerGetTime (player, &time), fail);
-			printf ("Started Playing:%s, %f beats\n", filePath, time);
-		}
 		
-		int waitCounter = 0;
-		while (1) {
-			usleep (1 * 1000 * 1000);
-			
-			if (didOverload) {
-				printf ("* * * * * %ld Overloads detected on device playing audio\n", didOverload);
-				overloadTime = AudioConvertHostTimeToNanos (overloadTime - startRunningTime);
-				printf ("\tSeconds after start = %lf\n", double(overloadTime / 1000000000.));
-				didOverload = 0;
-			}
-
-			if (wait && ++waitCounter > 10) break;
-			
-			MusicTimeStamp time;
-			require_noerr (result = MusicPlayerGetTime (player, &time), fail);
-						
-			if (shouldPrint) {
-				printf ("current time:%f beats,", time);
-				if (!shouldUseMIDIEndpoint) {
-					Float32 load;
-					require_noerr (result = AUGraphGetCPULoad(graph, &load), fail);
-					printf ("CPU load = %f\n", load);
-				} else
-					printf ("\n"); //no cpu load on AUGraph - its not running - if just playing out to MIDI
-			}
-			
-			if (time >= sequenceLength)
-				break;
-		}
-		
+		if (outputFilePath) 
+			WriteOutputFile (outputFilePath, dataFormat, srate, sequenceLength, shouldPrint, graph, numFrames, player);
+		else
+			PlayLoop (player, graph, sequenceLength, shouldPrint, waitAtEnd);
+					
 		require_noerr (result = MusicPlayerStop (player), fail);
 		if (shouldPrint) printf ("finished playing\n");
 			
 // this shows you how you should dispose of everything
 		require_noerr (result = DisposeMusicPlayer (player), fail);
 		require_noerr (result = DisposeMusicSequence(sequence), fail);
-	// don't own the graph so don't dispose it (the seq owns it....)
-	
+		// don't own the graph so don't dispose it (the seq owns it as we never set it ourselves, we just got it....)
 	}
 	else {
 		require_noerr (result = DisposeMusicSequence(sequence), fail);
 	}
 	
-	while (wait)
+	while (waitAtEnd)
 		CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.25, false);
 		
     return 0;
@@ -354,119 +372,322 @@ fail:
 	return result;
 }
 
+void PlayLoop (MusicPlayer &player, AUGraph &graph, MusicTimeStamp sequenceLength, bool shouldPrint, bool waitAtEnd)
+{
+	OSStatus result;
+	int waitCounter = 0;
+	while (1) {
+		usleep (2 * 1000 * 1000);
+		
+		if (didOverload) {
+			printf ("* * * * * %ld Overloads detected on device playing audio\n", didOverload);
+			overloadTime = AudioConvertHostTimeToNanos (overloadTime - startRunningTime);
+			printf ("\tSeconds after start = %lf\n", double(overloadTime / 1000000000.));
+			didOverload = 0;
+		}
+
+		if (waitAtEnd && ++waitCounter > 10) break;
+		
+		MusicTimeStamp time;
+		require_noerr (result = MusicPlayerGetTime (player, &time), fail);
+					
+		if (shouldPrint) {
+			printf ("current time: %6.2f beats", time);
+			if (graph) {
+				Float32 load;
+				require_noerr (result = AUGraphGetCPULoad(graph, &load), fail);
+				printf (", CPU load = %.2f%%\n", (load * 100.));
+			} else
+				printf ("\n"); //no cpu load on AUGraph - its not running - if just playing out to MIDI
+		}
+		
+		if (time >= sequenceLength)
+			break;
+	}
+	
+	return;
+fail:
+	if (shouldPrint) printf ("Error = %ld\n", result);
+	exit(1);
+}
+
 OSStatus GetSynthFromGraph (AUGraph& inGraph, AudioUnit& outSynth)
 {	
 	UInt32 nodeCount;
 	OSStatus result = noErr;
-	bool found = false;
-	require_noerr (result = AUGraphGetNodeCount (inGraph, &nodeCount), home);
+	require_noerr (result = AUGraphGetNodeCount (inGraph, &nodeCount), fail);
 	
 	for (UInt32 i = 0; i < nodeCount; ++i) 
 	{
 		AUNode node;
-		require_noerr (result = AUGraphGetIndNode(inGraph, i, &node), home);
+		require_noerr (result = AUGraphGetIndNode(inGraph, i, &node), fail);
 
 		ComponentDescription desc;
-		require_noerr (result = AUGraphGetNodeInfo(inGraph, node, &desc, 0, 0, 0), home);
+		require_noerr (result = AUGraphGetNodeInfo(inGraph, node, &desc, 0, 0, 0), fail);
 		
-			// search for either a V1 or V2 version of the synth
-		if (desc.componentType == kAudioUnitType_MusicDevice
-				|| (desc.componentType == 'aunt' && desc.componentSubType == kAudioUnitSubType_MusicDevice)) 
+		if (desc.componentType == kAudioUnitType_MusicDevice) 
 		{
-			require_noerr (result = AUGraphGetNodeInfo(inGraph, node, 0, 0, 0, &outSynth), home);
-			found = true;
-			break;
+			require_noerr (result = AUGraphGetNodeInfo(inGraph, node, 0, 0, 0, &outSynth), fail);
+			return noErr;
 		}
 	}
 	
-	if (!found) result = -1;
-home:	
-	return result;
+fail:		// didn't find the synth AU
+	return -1;
 }
 
-OSStatus OverlaodListenerProc(	AudioDeviceID			inDevice,
-								UInt32					inChannel,
-								Boolean					isInput,
-								AudioDevicePropertyID	inPropertyID,
-								void*					inClientData)
+void OverlaodListenerProc(	void *				inRefCon,
+								AudioUnit			ci,
+								AudioUnitPropertyID	inID,
+								AudioUnitScope		inScope,
+								AudioUnitElement	inElement)
 {
 	didOverload++;
 	overloadTime = AudioGetCurrentHostTime();
-	return noErr;
 }
 
 
-OSStatus SetFrameSize (AUGraph &inGraph, UInt32 frameSize)
+OSStatus SetUpGraph (AUGraph &inGraph, UInt32 numFrames, Float64 &sampleRate, bool isOffline)
 {
-	UInt32 nodeCount;
 	OSStatus result = noErr;
-	AudioUnit theOutputUnit = 0;
-	UInt32 theSize;
-	require_noerr (result = AUGraphGetNodeCount (inGraph, &nodeCount), home);
+	AudioUnit outputUnit = 0;
+	AUNode outputNode;
 	
-	for (UInt32 i = 0; i < nodeCount; ++i) 
+	// the frame size is the I/O size to the device
+	// the device is going to run at a sample rate it is set at
+	// so, when we set this, we also have to set the max frames for the graph nodes
+	UInt32 nodeCount;
+	require_noerr (result = AUGraphGetNodeCount (inGraph, &nodeCount), home);
+
+	for (int i = 0; i < (int)nodeCount; ++i) 
 	{
 		AUNode node;
 		require_noerr (result = AUGraphGetIndNode(inGraph, i, &node), home);
 
 		ComponentDescription desc;
-		require_noerr (result = AUGraphGetNodeInfo(inGraph, node, &desc, 0, 0, 0), home);
+		AudioUnit unit;
+		require_noerr (result = AUGraphGetNodeInfo(inGraph, node, &desc, 0, 0, &unit), home);
 		
-		if (desc.componentType == kAudioUnitType_Output || 
-			(desc.componentType == 'aunt' && desc.componentSubType == 'out ')) 
+		if (desc.componentType == kAudioUnitType_Output) 
 		{
-			require_noerr (result = AUGraphGetNodeInfo(inGraph, node, 0, 0, 0, &theOutputUnit), home);
-			break;
-		}		
-	}
+			if (outputUnit == 0) {
+				outputUnit = unit;
+				require_noerr (result = AUGraphGetNodeInfo(inGraph, node, 0, 0, 0, &outputUnit), home);
+				
+				if (!isOffline) {
+					// these two properties are only applicable if its a device we're playing too
+					require_noerr (result = AudioUnitSetProperty (outputUnit, 
+													kAudioDevicePropertyBufferFrameSize, 
+													kAudioUnitScope_Output, 0,
+													&numFrames, sizeof(numFrames)), home);
+				
+					require_noerr (result = AudioUnitAddPropertyListener (outputUnit, 
+													kAudioDeviceProcessorOverload, 
+													OverlaodListenerProc, 0), home);
 
-	AudioDeviceID theDevice;
-	theSize = sizeof (theDevice);
-	require_noerr (result = AudioUnitGetProperty (theOutputUnit, 
-								kAudioOutputUnitProperty_CurrentDevice, 
-								0, 0, &theDevice, &theSize), home);
+					// if we're rendering to the device, then we render at its sample rate
+					UInt32 theSize;
+					theSize = sizeof(sampleRate);
+					
+					require_noerr (result = AudioUnitGetProperty (outputUnit,
+												kAudioUnitProperty_SampleRate,
+												kAudioUnitScope_Output, 0,
+												&sampleRate, &theSize), home);
+				} else {
+						// remove device output node and add generic output
+					require_noerr (result = AUGraphRemoveNode (inGraph, node), home);
+					desc.componentSubType = kAudioUnitSubType_GenericOutput;
+					require_noerr (result = AUGraphNewNode (inGraph, &desc, 0, NULL, &node), home);
+					require_noerr (result = AUGraphGetNodeInfo(inGraph, node, NULL, NULL, NULL, &unit), home);
+					outputUnit = unit;
+					outputNode = node;
+					
+					// we render the output offline at the desired sample rate
+					require_noerr (result = AudioUnitSetProperty (outputUnit,
+												kAudioUnitProperty_SampleRate,
+												kAudioUnitScope_Output, 0,
+												&sampleRate, sizeof(sampleRate)), home);
+				}
+				// ok, lets start the loop again now and do it all...
+				i = -1;
+			}
+		}
+		else
+		{
+				// we only have to do this on the output side
+				// as the graph's connection mgmt will propogate this down.
+			if (outputUnit) {	
+					// reconnect up to the output unit if we're offline
+				if (isOffline && desc.componentType != kAudioUnitType_MusicDevice) {
+					require_noerr (result = AUGraphConnectNodeInput (inGraph, node, 0, outputNode, 0), home);
+				}
+				
+				require_noerr (result = AudioUnitSetProperty (unit,
+											kAudioUnitProperty_SampleRate,
+											kAudioUnitScope_Output, 0,
+											&sampleRate, sizeof(sampleRate)), home);
+			
+			
+			}
+		}
+		require_noerr (result = AudioUnitSetProperty (unit, kAudioUnitProperty_MaximumFramesPerSlice,
+												kAudioUnitScope_Global, 0,
+												&numFrames, sizeof(numFrames)), home);
+	}
 	
-	theSize = sizeof (frameSize);
-	require_noerr (result = AudioDeviceSetProperty (theDevice, 
-										0, 0, false, 
-										kAudioDevicePropertyBufferFrameSize, 
-										theSize, &frameSize), home);
-	
-	require_noerr (result = AudioDeviceAddPropertyListener(theDevice, 0, false,
-								kAudioDeviceProcessorOverload, OverlaodListenerProc, 0), home);
 home:
 	return result;
 }
 
-OSStatus LoadSMF(const char *filename, MusicSequence& sequence, MusicSequenceLoadFlags loadFlags, bool useV1)
+OSStatus LoadSMF(const char *filename, MusicSequence& sequence, MusicSequenceLoadFlags loadFlags)
 {
 	OSStatus result = noErr;
 	
 	require_noerr (result = NewMusicSequence(&sequence), home);
 
-	FSSpec fsSpec;
 	FSRef fsRef;
-	require_noerr (result = PathToFS (filename, &fsSpec, &fsRef), home);
+	require_noerr (result = FSPathMakeRef ((const UInt8*)filename, &fsRef, 0), home);
 	
-	if (useV1) {
-			// this is deprecated (FSSpec as of Tiger)
-		require_noerr (result = MusicSequenceLoadSMF (sequence, &fsSpec), home);
-	} else {
-		require_noerr (result = MusicSequenceLoadSMFWithFlags (sequence, &fsRef, loadFlags), home);
-	}
+	require_noerr (result = MusicSequenceLoadSMFWithFlags (sequence, &fsRef, loadFlags), home);
 	
 home:
 	return result;
 }
 
-OSStatus PathToFS(const char *filename, FSSpec *outSpec, FSRef *outRef)
-{	
-	OSStatus result = noErr;
+#pragma mark -
+#pragma mark Write Output File
 
-	require_noerr (result = FSPathMakeRef ((const UInt8*)filename, outRef, 0), home);
+bool TestFile (const char* fname, bool inDelete)
+{
+	// use this to determine if a file exists first
+	FILE *f = fopen (fname, "r");
+	if (f) {
+		fclose (f);
+		// wipe out the output file
+		if (inDelete) {
+			char str[1024];
+			sprintf (str, "rm %s", fname);
+			system(str);
+		}
+		return true;
+	}
+	return false;
+}
+
+void WriteOutputFile (const char*	outputFilePath, 
+					OSType			dataFormat, 
+					Float64			srate, 
+					MusicTimeStamp	sequenceLength, 
+					bool			shouldPrint,
+					AUGraph			inGraph,
+					UInt32			numFrames,
+					MusicPlayer		player)
+{
+		// delete existing output  file
+	TestFile (outputFilePath, true);
+	OSStatus result = 0;
+	UInt32 size;
+
+	CAStreamBasicDescription outputFormat;
+	outputFormat.mChannelsPerFrame = 2;
+	outputFormat.mSampleRate = srate;
+	outputFormat.mFormatID = dataFormat;
+	
+	AudioFileTypeID destFileType;
+	CAAudioFileFormats::Instance()->InferFileFormatFromFilename (outputFilePath, destFileType);
+	
+	if (dataFormat == kAudioFormatLinearPCM) {
+		outputFormat.mBytesPerPacket = outputFormat.mChannelsPerFrame * 2;
+		outputFormat.mFramesPerPacket = 1;
+		outputFormat.mBytesPerFrame = outputFormat.mBytesPerPacket;
+		outputFormat.mBitsPerChannel = 16;
+		
+		if (destFileType == kAudioFileWAVEType)
+			outputFormat.mFormatFlags = kLinearPCMFormatFlagIsSignedInteger
+								| kLinearPCMFormatFlagIsPacked;
+		else
+			outputFormat.mFormatFlags = kLinearPCMFormatFlagIsBigEndian
+								| kLinearPCMFormatFlagIsSignedInteger
+								| kLinearPCMFormatFlagIsPacked;
+	} else {
+		// use AudioFormat API to fill out the rest.
+		size = sizeof(outputFormat);
+		require_noerr (result = AudioFormatGetProperty(kAudioFormatProperty_FormatInfo, 0, NULL, &size, &outputFormat), fail);
+	}
+
+	if (shouldPrint) {
+		printf ("Writing to file: %s with format:\n* ", outputFilePath);
+		outputFormat.Print();
+	}
+	
+	FSRef parentDir;
+	CFStringRef destFileName;
+	require_noerr (result = PosixPathToParentFSRefAndName(outputFilePath, parentDir, destFileName), fail);
+
+	ExtAudioFileRef outfile;
+	result = ExtAudioFileCreateNew (&parentDir, destFileName, destFileType, &outputFormat, NULL, &outfile);
+	CFRelease (destFileName);
+	require_noerr (result, fail);
+
+	AudioUnit outputUnit;	
+	UInt32 nodeCount;
+	require_noerr (result = AUGraphGetNodeCount (inGraph, &nodeCount), fail);
+	
+	for (UInt32 i = 0; i < nodeCount; ++i) 
+	{
+		AUNode node;
+		require_noerr (result = AUGraphGetIndNode(inGraph, i, &node), fail);
+
+		ComponentDescription desc;
+		require_noerr (result = AUGraphGetNodeInfo(inGraph, node, &desc, 0, 0, NULL), fail);
+		
+		if (desc.componentType == kAudioUnitType_Output) 
+		{
+			require_noerr (result = AUGraphGetNodeInfo(inGraph, node, 0, 0, 0, &outputUnit), fail);
+			break;
+		}
+	}
+
+	{
+		CAStreamBasicDescription clientFormat;
+		size = sizeof(clientFormat);
+		require_noerr (result = AudioUnitGetProperty (outputUnit,
+													kAudioUnitProperty_StreamFormat,
+													kAudioUnitScope_Output, 0,
+													&clientFormat, &size), fail);
+		size = sizeof(clientFormat);
+		require_noerr (result = ExtAudioFileSetProperty(outfile, kExtAudioFileProperty_ClientDataFormat, size, &clientFormat), fail);
+		
+		{
+			MusicTimeStamp currentTime;
+			AUOutputBL outputBuffer (clientFormat, numFrames);
+			AudioTimeStamp tStamp;
+			memset (&tStamp, 0, sizeof(AudioTimeStamp));
+			tStamp.mFlags = kAudioTimeStampSampleTimeValid;
+			int i = 0;
+			int numTimesFor10Secs = (int)(10. / (numFrames / srate));
+			do {
+				outputBuffer.Prepare();
+				AudioUnitRenderActionFlags actionFlags = 0;
+				require_noerr (result = AudioUnitRender (outputUnit, &actionFlags, &tStamp, 0, numFrames, outputBuffer.ABL()), fail);
+
+				tStamp.mSampleTime += numFrames;
 				
-	require_noerr (result = FSGetCatalogInfo(outRef, kFSCatInfoNone, NULL, NULL, outSpec, NULL), home);
+				require_noerr (result = ExtAudioFileWrite(outfile, numFrames, outputBuffer.ABL()), fail);	
 
-home:
-	return result;
+				require_noerr (result = MusicPlayerGetTime (player, &currentTime), fail);
+				if (shouldPrint && (++i % numTimesFor10Secs == 0))
+					printf ("current time: %6.2f beats\n", currentTime);
+			} while (currentTime < sequenceLength);
+		}
+	}
+	
+// close
+	ExtAudioFileDispose(outfile);
+
+	return;
+
+fail:
+	printf ("Problem: %ld\n", result); 
+	exit(1);
 }

@@ -96,7 +96,7 @@ int main (int argc, char * const argv[])
 	XThrowIfError (AUGraphStart (theGraph), "AUGraphStart");
 	
 // sleep until the file is finished
-	usleep ((int)fileDuration * 1000 * 1000);
+	usleep ((int)(fileDuration * 1000. * 1000.));
 
 // lets clean up
 	XThrowIfError (AUGraphStop (theGraph), "AUGraphStop");
@@ -183,6 +183,9 @@ void MakeSimpleGraph (AUGraph &theGraph, CAAudioUnit &fileAU, CAStreamBasicDescr
 // prepare the file AU for playback
 // set its output channels
 	XThrowIfError (fileAU.SetNumberChannels (kAudioUnitScope_Output, 0, fileFormat.NumberChannels()), "SetNumberChannels");
+
+// set the output sample rate of the file AU to be the same as the file:
+	XThrowIfError (fileAU.SetSampleRate (kAudioUnitScope_Output, 0, fileFormat.mSampleRate), "SetSampleRate");
 
 // load in the file 
 	XThrowIfError (fileAU.SetProperty(kAudioUnitProperty_ScheduledFileIDs, 

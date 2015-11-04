@@ -64,6 +64,8 @@ struct AudioFileIO
 	char *srcBuffer;
 	UInt32 srcBufferSize;
 	CAStreamBasicDescription srcFormat;
+	UInt32	srcSizePerPacket;
+	bool	srcIsVBR;
 };
 
 // input data proc callback
@@ -77,15 +79,24 @@ OSStatus EncoderDataProc(		AudioConverterRef				inAudioConverter,
 	AudioFileIO* afio = (AudioFileIO*)inUserData;
 	
 // figure out how much to read
+	bool needPkts = false;
 
-	UInt32 maxPackets = afio->srcBufferSize / afio->srcFormat.mBytesPerPacket;
+	UInt32 maxPackets = afio->srcBufferSize / afio->srcSizePerPacket;
+	if (afio->srcIsVBR) {
+		maxPackets = 1;
+		needPkts = true;
+	}
 	if (*ioNumberDataPackets > maxPackets) *ioNumberDataPackets = maxPackets;
+
+    static AudioStreamPacketDescription	outPacketDesc;
 
 // read from the file
 
 	UInt32 outNumBytes;
-	OSStatus err = AudioFileReadPackets(afio->afid, false, &outNumBytes, NULL, afio->pos, ioNumberDataPackets, afio->srcBuffer);
+	OSStatus err = AudioFileReadPackets(afio->afid, false, &outNumBytes, (needPkts ? &outPacketDesc : NULL), afio->pos, ioNumberDataPackets, afio->srcBuffer);
 	if (err == eofErr) err = noErr;
+
+//	printf ("Input Proc: Read %ld packets, size: %ld\n", *ioNumberDataPackets, afio->pos, outNumBytes);
 	
 // advance input file packet position
 
@@ -93,15 +104,25 @@ OSStatus EncoderDataProc(		AudioConverterRef				inAudioConverter,
 
 // put the data pointer into the buffer list
 
-	if (outDataPacketDescription) *outDataPacketDescription = 0;
 	ioData->mBuffers[0].mData = afio->srcBuffer;
 	ioData->mBuffers[0].mDataByteSize = outNumBytes;
 	ioData->mBuffers[0].mNumberChannels = 2;
 
+	if (outDataPacketDescription) {
+		if (needPkts)
+			*outDataPacketDescription = &outPacketDesc;
+		else 
+			*outDataPacketDescription = 0;
+	}
+	
 	return err;
 }
 
-int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fileType, FSRef &dirFSRef, char* fname)
+int ConvertFile (FSRef							&inputFSRef, 
+					OSType						fileType, 
+					FSRef						&dirFSRef, 
+					char*						fname, 
+					CAStreamBasicDescription	&outputFormat)
 {
 	AudioFileID infile, outfile;
 	
@@ -114,22 +135,7 @@ int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fi
 	err = AudioFileGetProperty(infile, kAudioFilePropertyDataFormat, &size, &inputFormat);
 	XThrowIfError (err, "AudioFileGetProperty kAudioFilePropertyDataFormat");
 	printf ("Source File format: "); inputFormat.Print();
-
-	CAStreamBasicDescription outputFormat;	
-// set up the output file format
-	if (format) {
-		// need to set at least these fields for kAudioFormatProperty_FormatInfo
-		outputFormat.mFormatID = format;
-		outputFormat.mSampleRate = inputFormat.mSampleRate;
-		outputFormat.mChannelsPerFrame = inputFormat.mChannelsPerFrame;
-		
-	// use AudioFormat API to fill out the rest.
-		size = sizeof(outputFormat);
-		err = AudioFormatGetProperty(kAudioFormatProperty_FormatInfo, 0, NULL, &size, &outputFormat);
-	} else {
-		outputFormat = inputFormat;
-		outputFormat.mSampleRate = sampleRate;
-	}
+	printf ("Dest File format: "); outputFormat.Print();
 	
 // create the AudioConverter
 
@@ -142,8 +148,6 @@ int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fi
 	size = sizeof(outputFormat);
 	err = AudioConverterGetProperty(converter, kAudioConverterCurrentOutputStreamDescription, &size, &outputFormat);
 	XThrowIfError (err, "get kAudioConverterCurrentOutputStreamDescription");
-
-	printf ("Dest File format: "); outputFormat.Print();
 
 	CFStringRef cfName = CFStringCreateWithCString (NULL, fname, kCFStringEncodingUTF8);
 	FSRef fsRef;
@@ -161,7 +165,19 @@ int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fi
 	afio.srcBufferSize = kSrcBufSize;
 	afio.pos = 0;
 	afio.srcFormat = inputFormat;
-
+	
+	if (inputFormat.mBytesPerPacket == 0) {
+		// format is VBR, so we need to get max size per packet
+		size = sizeof(afio.srcSizePerPacket);
+		err = AudioConverterGetProperty(converter, kAudioConverterPropertyMaximumOutputPacketSize, &size, &afio.srcSizePerPacket);
+		XThrowIfError (err, "MaximumOutputPacketSize::Input Format");
+		afio.srcIsVBR = true;
+	}
+	else {
+		afio.srcSizePerPacket = inputFormat.mBytesPerPacket;
+		afio.srcIsVBR = false;
+	}
+	
 // grab the cookie from the converter and write it to the file
 	UInt32 cookieSize = 0;
 	err = AudioConverterGetPropertyInfo(converter, kAudioConverterCompressionMagicCookie, &cookieSize, NULL);
@@ -174,8 +190,6 @@ int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fi
 	
 		err = AudioFileSetProperty (outfile, kAudioFilePropertyMagicCookieData, cookieSize, cookie);
 			// even though some formats have cookies, some files don't take them
-		if (!err)
-			printf ("write cookie to file: %ld\n", cookieSize);
 		
 		delete [] cookie;
 	}
@@ -230,7 +244,7 @@ int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fi
 
 		numPackets = theOutputBufSize / sizePerPacket;
 		pktDescs = new AudioStreamPacketDescription [numPackets];
-
+		
 	} else {
 		numPackets = theOutputBufSize / sizePerPacket;
 	}
@@ -262,14 +276,14 @@ int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fi
 		}
 
 // write to output file
-
 		UInt32 inNumBytes = fillBufList.mBuffers[0].mDataByteSize;
 		err = AudioFileWritePackets(outfile, false, inNumBytes, pktDescs, pos, &ioOutputDataPackets, outputBuffer);
 		XThrowIfError (err, "AudioFileWritePackets");	
 		
 // advance output file packet position
-
 		pos += ioOutputDataPackets;
+
+//		printf ("Convert Output: Write %ld packets, size: %ld\n", ioOutputDataPackets, inNumBytes);
 		
 		if (outputFormat.mFramesPerPacket) { 
 				// this is the common case: format has constant frames per packet
@@ -282,7 +296,7 @@ int ConvertFile (FSRef &inputFSRef, OSType format, Float64 sampleRate, OSType fi
 	}
 
 // we right out any of the leading and trailing frames for compressed formats only	
-	if (outputFormat.mBitsPerChannel) {
+	if (outputFormat.mBitsPerChannel == 0) {
 	// last job is to make sure we write out the priming and remainder details to the file
 		AudioConverterPrimeInfo primeInfo;
 		UInt32 primeSize = sizeof(primeInfo);
